@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html, body, #root { height: 100%; margin: 0; padding: 0; }
+  body { background: #1a1d21; color: #d1d2d3; overflow: hidden; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #6a6a6a; }
+}
+
+@layer components {
+  .sidebar-item {
+    @apply flex items-center gap-2 px-3 py-1 rounded cursor-pointer text-sidebar-muted text-sm hover:bg-sidebar-hover hover:text-sidebar-text transition-colors;
+  }
+  .sidebar-item.active {
+    @apply bg-brand-primary text-white;
+  }
+  .agent-avatar {
+    @apply w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0;
+  }
+  .message-input {
+    @apply w-full bg-chat-input border border-chat-border rounded-lg px-4 py-3 text-sm text-white placeholder-sidebar-muted resize-none focus:outline-none focus:border-brand-primary transition-colors;
+  }
+  .btn-primary {
+    @apply px-4 py-2 bg-brand-primary text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply px-3 py-1.5 text-sidebar-muted text-sm rounded hover:bg-sidebar-hover hover:text-white transition-colors;
+  }
+  .panel-card {
+    @apply bg-[#222529] rounded-lg border border-chat-border p-4;
+  }
+  .badge-commander {
+    @apply text-xs px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 font-medium;
+  }
+  .badge-worker {
+    @apply text-xs px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300 font-medium;
+  }
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+  .status-dot.online { @apply bg-emerald-400; }
+  .status-dot.working { @apply bg-yellow-400 animate-pulse; }
+  .status-dot.idle { @apply bg-sidebar-muted; }
+}
+
+/* Custom drag region for frameless window */
+.drag-region { -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }
+
+/* Smooth message animation */
+@keyframes messageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.message-enter { animation: messageIn 0.15s ease-out; }
+
+/* Typing indicator */
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+.typing-dot { animation: bounce 1.2s infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }

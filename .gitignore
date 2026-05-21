@@ -1,0 +1,20 @@
+node_modules/
+dist/
+dist-electron/
+.env
+vault/.obsidian/
+
+# 개인 폴더 (API 키, 개인 메모 등)
+직박구리/
+
+# 로컬 빌드/개발 로그
+*.log
+*.err.log
+
+# Claude Code / OMC 개발 도구 설정
+.claude/
+.omc/
+
+# OS
+.DS_Store
+Thumbs.db

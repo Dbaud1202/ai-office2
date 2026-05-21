@@ -1,0 +1,80 @@
+{
+  "title": "AI 오피스2 → Paperclip 수준 달성",
+  "description": "AI 오피스2가 Paperclip(https://github.com/paperclipai/paperclip)의 핵심 기능 수준에 도달하기 위한 6개 핵심 User Story 구현.",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "에이전트별 월간 예산 하드스탑",
+      "acceptanceCriteria": [
+        "AgentBudget 타입이 types/index.ts에 정의되어 있다 (agentId, monthlyUsdLimit, warnAtPercent, blockAtLimit)",
+        "agentBudgetStore.ts가 존재하고 에이전트별 예산 설정을 localStorage에 저장/로드한다",
+        "checkAgentBudget(agentId, providerId, inputChars, outputChars) 함수가 BudgetGuardResult를 반환한다",
+        "BudgetPanel에 에이전트별 예산 설정 UI가 추가되어 있다 (에이전트 선택, 한도 입력, 저장 버튼)",
+        "npm run build 성공"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-002",
+      "title": "Atomic 작업 체크아웃 (중복 실행 방지)",
+      "acceptanceCriteria": [
+        "TaskCheckout 타입이 types/index.ts에 추가되어 있다 (taskId, agentId, lockedAt, expiresAt)",
+        "taskCheckout.ts 유틸이 존재하고 checkoutTask/releaseTask/getActiveCheckouts 함수를 export한다",
+        "checkoutTask는 이미 체크아웃된 작업에 대해 null을 반환한다 (중복 방지)",
+        "checkoutTask는 만료된 락을 자동으로 해제한다 (기본 5분 TTL)",
+        "TaskBoard 컴포넌트에 체크아웃 상태(잠금 아이콘, 담당 에이전트)가 표시된다",
+        "npm run build 성공"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-003",
+      "title": "하트비트 엔진 (지속 에이전트 상태)",
+      "acceptanceCriteria": [
+        "HeartbeatState 타입이 types/index.ts에 정의되어 있다 (agentId, lastHeartbeat, heartbeatCount, status, history)",
+        "heartbeatEngine.ts가 존재하고 startHeartbeat/stopHeartbeat/getHeartbeatState 함수를 export한다",
+        "하트비트 엔진은 설정된 간격(기본 30초)마다 등록된 에이전트의 상태를 갱신한다",
+        "Sidebar에 에이전트 하트비트 상태(녹색 점=활성, 회색=비활성)가 표시된다",
+        "npm run build 성공"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-004",
+      "title": "실행 전 승인 게이트",
+      "acceptanceCriteria": [
+        "ApprovalGate 타입이 types/index.ts에 정의되어 있다 (agentIds, toolPatterns, costThresholdUsd, enabled)",
+        "approvalGateStore.ts가 존재하고 게이트 규칙을 저장/로드한다",
+        "requiresApproval(agentId, toolName, estimatedCost) 함수가 boolean을 반환한다",
+        "createGatedApproval()이 ApprovalRequest를 자동 생성한다",
+        "SettingsPage에 승인 게이트 규칙 설정 UI가 있다 (에이전트 선택, 도구 패턴, 비용 임계값)",
+        "npm run build 성공"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-005",
+      "title": "에이전트 설정 버전관리 및 롤백",
+      "acceptanceCriteria": [
+        "AgentConfigVersion 타입이 types/index.ts에 정의되어 있다 (id, agentId, config, savedAt, label)",
+        "agentConfigVersions.ts가 존재하고 saveVersion/getVersions/rollbackToVersion 함수를 export한다",
+        "에이전트 설정 저장 시 버전이 기록된다 (최대 10개 유지)",
+        "SettingsPage에 버전 히스토리 UI가 있다 (버전 목록, 롤백 버튼)",
+        "npm run build 성공"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-006",
+      "title": "회사 구조 내보내기/가져오기 (포터빌리티)",
+      "acceptanceCriteria": [
+        "exportCompany() 함수가 workflows, scheduledJobs, agentBudgets, approvalGate를 JSON으로 직렬화한다",
+        "exportCompany()는 apiKey, webhookUrl 등 민감 필드를 '[REDACTED]'로 치환한다",
+        "importCompany(json) 함수가 JSON을 파싱해 설정을 복원한다",
+        "SettingsPage에 내보내기(파일 다운로드) 및 가져오기(파일 업로드) 버튼이 있다",
+        "npm run build 성공"
+      ],
+      "passes": true
+    }
+  ]
+}
