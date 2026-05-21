@@ -25,7 +25,7 @@ Compose a team of specialized AI agents, give them a task, and watch them collab
 ### Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-office2.git
+git clone https://github.com/Dbaud1202/ai-office2.git
 cd ai-office2
 npm install
 cp .env.example .env   # add your API keys
@@ -77,7 +77,7 @@ React 19 · TypeScript · Electron 33 · Vite 6 · Tailwind CSS · Supabase (opt
 ### 1. 설치
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-office2.git
+git clone https://github.com/Dbaud1202/ai-office2.git
 cd ai-office2
 npm install
 ```
