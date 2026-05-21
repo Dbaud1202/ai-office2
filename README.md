@@ -15,7 +15,7 @@ Compose a team of specialized AI agents, give them a task, and watch them collab
 ### Features
 
 - **Multi-agent collaboration** — PM delegates to Researcher, Developer, Writer automatically
-- **8 AI providers** — Claude Opus 4.7 / Sonnet 4.6, GPT-4.1 / o3 / o4-mini, Gemini 2.5 Pro, Mistral, DeepSeek, OpenRouter, Ollama (local), and more
+- **8 AI providers** — Claude, GPT, Gemini, Mistral, DeepSeek, OpenRouter, Ollama, and more
 - **Obsidian Vault memory** — agents write results as Markdown for long-term memory
 - **Budget management** — per-agent monthly USD caps with hard-stop
 - **Approval gate** — require human approval before high-cost actions
@@ -56,7 +56,7 @@ React 19 · TypeScript · Electron 33 · Vite 6 · Tailwind CSS · Supabase (opt
 | 기능 | 설명 |
 |------|------|
 | **에이전트 팀** | PM·리서처·개발자·작가 에이전트가 역할 분담하여 협력 |
-| **멀티 프로바이더** | Claude, GPT-4o, Gemini, Mistral 등 8개 AI 모델 지원 |
+| **멀티 프로바이더** | Claude Opus 4.7, GPT-4.1, Gemini 2.5 Pro, Mistral 등 8개 프로바이더 지원 |
 | **Obsidian Vault** | 에이전트 작업 결과를 마크다운으로 장기 기억 |
 | **실행 타임라인** | 에이전트 간 위임 흐름을 실시간으로 시각화 |
 | **예산 관리** | 에이전트별 월간 USD 한도 설정 및 하드스탑 |
