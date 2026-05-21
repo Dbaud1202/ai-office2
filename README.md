@@ -1,5 +1,46 @@
 # AI 오피스2 — AI Agent Team Platform
 
+> **Build your own AI agent team** and delegate complex tasks in natural language.  
+> PM, Researcher, Developer, and Writer agents collaborate in a Slack-style UI to deliver results — powered by Claude, GPT-4o, Gemini, and more.
+
+[한국어 README](#한국어)
+
+---
+
+## English
+
+**AI Office 2** is an open-source, Slack-style AI agent team platform.  
+Compose a team of specialized AI agents, give them a task, and watch them collaborate.
+
+### Features
+
+- **Multi-agent collaboration** — PM delegates to Researcher, Developer, Writer automatically
+- **8 AI providers** — Claude, GPT-4o, Gemini, Mistral, DeepSeek, OpenRouter, Ollama, and more
+- **Obsidian Vault memory** — agents write results as Markdown for long-term memory
+- **Budget management** — per-agent monthly USD caps with hard-stop
+- **Approval gate** — require human approval before high-cost actions
+- **Heartbeat engine** — real-time agent status monitoring
+- **Electron desktop app** — runs locally, API keys stay on your machine
+
+### Quick Start
+
+```bash
+git clone https://github.com/YOUR_USERNAME/ai-office2.git
+cd ai-office2
+npm install
+cp .env.example .env   # add your API keys
+npm run dev            # web app
+npm run electron:dev   # desktop app
+```
+
+### Tech Stack
+
+React 19 · TypeScript · Electron 33 · Vite 6 · Tailwind CSS · Supabase (optional)
+
+---
+
+## 한국어
+
 > **나만의 AI 에이전트 팀**을 구성하고, 복잡한 작업을 자연어로 위임하세요.  
 > Slack 스타일 UI에서 PM·리서처·개발자·작가 에이전트가 협력하여 결과물을 만들어냅니다.
 
