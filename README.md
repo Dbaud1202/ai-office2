@@ -15,7 +15,7 @@ Compose a team of specialized AI agents, give them a task, and watch them collab
 ### Features
 
 - **Multi-agent collaboration** — PM delegates to Researcher, Developer, Writer automatically
-- **8 AI providers** — Claude, GPT-4o, Gemini, Mistral, DeepSeek, OpenRouter, Ollama, and more
+- **8 AI providers** — Claude Opus 4.7 / Sonnet 4.6, GPT-4.1 / o3 / o4-mini, Gemini 2.5 Pro, Mistral, DeepSeek, OpenRouter, Ollama (local), and more
 - **Obsidian Vault memory** — agents write results as Markdown for long-term memory
 - **Budget management** — per-agent monthly USD caps with hard-stop
 - **Approval gate** — require human approval before high-cost actions
@@ -121,11 +121,13 @@ PM(지우)에게 자연어로 작업을 요청하면, 나머지 에이전트에�
 
 ## 지원 AI 프로바이더
 
-- **Anthropic Claude** (claude-opus-4, claude-sonnet-4 등)
-- **OpenAI GPT** (gpt-4o, gpt-4.1 등)
-- **Google Gemini** (gemini-2.0-flash 등)
-- **Mistral AI**
+- **Anthropic Claude** (claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5 등)
+- **OpenAI GPT** (gpt-4.1, gpt-4o, o3, o4-mini 등)
+- **Google Gemini** (gemini-2.5-pro, gemini-2.5-flash, gemini-2.0-flash 등)
+- **Mistral AI** (mistral-large-2, mistral-small-3 등)
+- **DeepSeek** (deepseek-chat, deepseek-reasoner 등)
 - **OpenRouter** (100+ 모델 통합)
+- **Ollama** (로컬 모델 — llama3.3, qwen3, gemma3 등)
 - 그 외 OpenAI 호환 엔드포인트
 
 ---
