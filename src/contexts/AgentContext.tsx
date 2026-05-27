@@ -18,6 +18,11 @@ interface AgentContextValue {
 const AgentContext = createContext<AgentContextValue | null>(null);
 const CUSTOM_AGENTS_KEY = 'ao2-custom-agents-v1';
 const AGENT_PROFILE_KEY = 'ao2-agent-profile-overrides-v1';
+const ELECTRON_SAFE_STORAGE_KEY = '__electron_safe_storage__';
+
+function electronAPI() {
+  return typeof window !== 'undefined' ? (window as any).electronAPI : null;
+}
 
 function loadCustomAgents(): Agent[] {
   try {
@@ -61,9 +66,18 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       ...profiles[agent.id],
     }));
   });
-  const [apiKey, setApiKeyState] = useState<string>(
-    () => localStorage.getItem('ao2-api-key') ?? ''
-  );
+  const [apiKey, setApiKeyState] = useState<string>(() => {
+    if (electronAPI()) {
+      const legacy = localStorage.getItem('ao2-api-key') ?? '';
+      if (legacy) {
+        electronAPI()?.providerKeySet?.('claude', legacy);
+        localStorage.removeItem('ao2-api-key');
+        return ELECTRON_SAFE_STORAGE_KEY;
+      }
+      return '';
+    }
+    return localStorage.getItem('ao2-api-key') ?? '';
+  });
   const [model, setModelState] = useState<string>(
     () => localStorage.getItem('ao2-model') ?? 'claude-sonnet-4-6'
   );
@@ -80,6 +94,13 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   );
 
   const setApiKey = useCallback((key: string) => {
+    const api = electronAPI();
+    if (api?.providerKeySet) {
+      localStorage.removeItem('ao2-api-key');
+      api.providerKeySet('claude', key);
+      setApiKeyState(key ? ELECTRON_SAFE_STORAGE_KEY : '');
+      return;
+    }
     localStorage.setItem('ao2-api-key', key);
     setApiKeyState(key);
   }, []);

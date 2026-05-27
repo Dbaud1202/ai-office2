@@ -16,7 +16,7 @@ declare global {
       webview: React.DetailedHTMLProps<React.HTMLAttributes<WebviewElement>, WebviewElement> & {
         src?: string;
         partition?: string;
-        allowpopups?: string;
+        webpreferences?: string;
       };
     }
   }
@@ -178,7 +178,7 @@ export default function WebViewPage() {
             }}
             src={service.url}
             partition={`persist:${service.id}`}
-            allowpopups={true}
+            webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes"
             style={{
               width: '100%',
               height: '100%',

@@ -1,12 +1,20 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, safeStorage, shell, Notification, desktopCapturer, screen } = require('electron');
-const { exec } = require('child_process');
+const { app, BrowserWindow, ipcMain, safeStorage, shell, Notification, desktopCapturer, screen, dialog } = require('electron');
+const { execFile } = require('child_process');
 const http = require('http');
 const https = require('https');
 const path = require('path');
 const fsSync = require('fs');
 const isDev = process.env.NODE_ENV === 'development';
+
+const rawIpcHandle = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = (channel, listener) => rawIpcHandle(channel, async (event, ...args) => {
+  if (!isTrustedIpcSender(event)) {
+    return { ok: false, error: 'Blocked untrusted IPC sender.' };
+  }
+  return listener(event, ...args);
+});
 
 // ── Provider key storage (safeStorage) ──────────────────────────────────────
 function getKeysFilePath() {
@@ -40,18 +48,7 @@ ipcMain.handle('provider-key-set', (_, { id, key }) => {
 });
 
 ipcMain.handle('provider-key-get-all', () => {
-  const store = readEncryptedKeys();
-  const result = {};
-  for (const [id, raw] of Object.entries(store)) {
-    try {
-      result[id] = safeStorage.isEncryptionAvailable()
-        ? safeStorage.decryptString(Buffer.from(raw, 'base64'))
-        : raw;
-    } catch {
-      result[id] = '';
-    }
-  }
-  return { ok: true, data: result };
+  return { ok: true, data: getProviderKeyStatus() };
 });
 
 function decryptKey(providerId) {
@@ -104,7 +101,7 @@ function universalHttpJson(method, urlStr, body, headers = {}) {
 
 // 메인 프로세스에서 직접 키를 읽어 모델 목록 조회
 ipcMain.handle('provider-fetch-models', async (_, { providerId, fallbackKey }) => {
-  const key = decryptKey(providerId) || fallbackKey || '';
+  const key = decryptKey(providerId) || normalizeApiKeyInput(fallbackKey);
   try {
     switch (providerId) {
       case 'openai':
@@ -125,7 +122,7 @@ ipcMain.handle('provider-fetch-models', async (_, { providerId, fallbackKey }) =
       case 'openrouter':
         return universalHttpJson('GET', 'https://openrouter.ai/api/v1/models', null, { Authorization: `Bearer ${key}` });
       case 'ollama': {
-        const base = key?.startsWith('http') ? key.replace(/\/$/, '') : 'http://localhost:11434';
+        const base = normalizeLocalOllamaBase(key?.startsWith('http') ? key : 'http://localhost:11434');
         return universalHttpJson('GET', `${base}/api/tags`, null, {});
       }
       default:
@@ -138,7 +135,7 @@ ipcMain.handle('provider-fetch-models', async (_, { providerId, fallbackKey }) =
 // ────────────────────────────────────────────────────────────────────────────
 
 function openAiCompatibleChat({ apiKey, model, systemPrompt, messages, baseURL, headers }) {
-  return universalHttpJson('POST', `${String(baseURL || 'https://api.openai.com/v1').replace(/\/$/, '')}/chat/completions`, {
+  return universalHttpJson('POST', `${normalizeProviderBaseURL(baseURL)}/chat/completions`, {
     model,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -182,7 +179,7 @@ function claudeChat({ apiKey, model, systemPrompt, messages }) {
 }
 
 function ollamaChat({ apiKey, model, systemPrompt, messages }) {
-  const base = apiKey?.startsWith('http') ? apiKey.replace(/\/$/, '') : 'http://localhost:11434';
+  const base = normalizeLocalOllamaBase(apiKey?.startsWith('http') ? apiKey : 'http://localhost:11434');
   return universalHttpJson('POST', `${base}/api/chat`, {
     model,
     stream: false,
@@ -195,7 +192,7 @@ function ollamaChat({ apiKey, model, systemPrompt, messages }) {
 
 ipcMain.handle('provider-chat', async (_, params) => {
   const { providerId } = params;
-  const apiKey = params.apiKey || decryptKey(providerId);
+  const apiKey = normalizeApiKeyInput(params.apiKey) || decryptKey(providerId);
   if (!apiKey && providerId !== 'ollama') return { ok: false, error: `${providerId} API key is missing` };
 
   try {
@@ -228,6 +225,61 @@ ipcMain.handle('provider-chat', async (_, params) => {
 });
 
 let mainWindow;
+
+const SAFE_STORAGE_SENTINEL = '__electron_safe_storage__';
+
+function normalizeApiKeyInput(value) {
+  return value && value !== SAFE_STORAGE_SENTINEL ? value : '';
+}
+
+function getProviderKeyStatus() {
+  const store = readEncryptedKeys();
+  return Object.fromEntries(Object.keys(store).map((id) => [id, true]));
+}
+
+function isTrustedIpcSender(event) {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return false;
+  const url = event.senderFrame?.url || '';
+  if (isDev) {
+    return /^https?:\/\/(?:localhost|127\.0\.0\.1):5173(?:\/|$)/i.test(url);
+  }
+  return url.startsWith('file://');
+}
+
+function isAllowedExternalUrl(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || ''));
+    if (!['https:', 'http:', 'obsidian:'].includes(url.protocol)) return false;
+    if (url.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(url.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const ALLOWED_PROVIDER_HOSTS = new Set([
+  'api.openai.com',
+  'api.deepseek.com',
+  'api.moonshot.ai',
+  'api.minimax.io',
+  'openrouter.ai',
+]);
+
+function normalizeProviderBaseURL(rawUrl, fallback = 'https://api.openai.com/v1') {
+  const url = new URL(String(rawUrl || fallback));
+  if (url.protocol !== 'https:' || !ALLOWED_PROVIDER_HOSTS.has(url.hostname)) {
+    throw new Error('Provider baseURL is not allowed');
+  }
+  return url.toString().replace(/\/$/, '');
+}
+
+function normalizeLocalOllamaBase(rawUrl) {
+  const url = new URL(String(rawUrl || 'http://localhost:11434'));
+  if (url.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(url.hostname)) {
+    throw new Error('Ollama base URL must be local http://localhost or http://127.0.0.1');
+  }
+  return url.toString().replace(/\/$/, '');
+}
 
 function getVaultRoot() {
   return process.env.AIOFFICE_VAULT_ROOT || path.join(app.getPath('documents'), 'AI오피스2 Vault');
@@ -309,7 +361,7 @@ function createWindow() {
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isAllowedExternalUrl(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 }
@@ -366,6 +418,27 @@ function isPathAllowed(target) {
   return getAutomationRoots().some((root) => isInsidePath(resolved, root));
 }
 
+function resolveVaultRoot(vaultRoot) {
+  const root = path.resolve(vaultRoot || ensureVaultRoot());
+  if (!isPathAllowed(root) || looksSensitivePath(root)) {
+    throw new Error('Vault root is outside approved folders or is sensitive.');
+  }
+  return root;
+}
+
+function safeVaultPath(vaultRoot, relativePath = '') {
+  const root = resolveVaultRoot(vaultRoot);
+  const rel = String(relativePath || '');
+  if (path.isAbsolute(rel) || looksSensitivePath(rel)) {
+    throw new Error('Vault path must be a non-sensitive relative path.');
+  }
+  const target = path.resolve(root, rel);
+  if (!isInsidePath(target, root)) {
+    throw new Error('Vault path escapes the vault root.');
+  }
+  return target;
+}
+
 function isDestructivePathAllowed(target) {
   if (!isPathAllowed(target)) return false;
   const resolved = path.resolve(target);
@@ -409,6 +482,36 @@ function safeToolError(message) {
   return `Blocked by local safety harness: ${message}`;
 }
 
+const HIGH_RISK_TOOLS = new Set([
+  'computer_mouse_click',
+  'computer_type_text',
+  'computer_key_press',
+  'computer_write_file',
+  'computer_delete_path',
+  'computer_move_path',
+  'computer_execute_command',
+  'computer_open_path',
+  'app_focus_window',
+  'app_click_element',
+  'app_set_text',
+  'app_send_hotkey',
+]);
+
+function confirmHighRiskTool(name, input) {
+  if (!HIGH_RISK_TOOLS.has(name)) return true;
+  if (!mainWindow) return false;
+  const response = dialog.showMessageBoxSync(mainWindow, {
+    type: 'warning',
+    buttons: ['Allow once', 'Block'],
+    defaultId: 1,
+    cancelId: 1,
+    title: 'AI Office automation request',
+    message: `Allow tool "${name}" to act on this computer?`,
+    detail: JSON.stringify(input || {}, null, 2).slice(0, 1000),
+  });
+  return response === 0;
+}
+
 function isSafeSkillsCommand(command) {
   const trimmed = String(command || '').trim();
   const lower = trimmed.toLowerCase();
@@ -432,8 +535,14 @@ function isSafePowerShellCommand(command) {
   const lower = trimmed.toLowerCase();
   if (!trimmed) return false;
   if (looksSensitivePath(trimmed)) return false;
+  if (/[;&|<>`$]/.test(trimmed) || /[\r\n]/.test(trimmed)) return false;
 
   const blockedTokens = [
+    '-encodedcommand',
+    '-enc',
+    'frombase64string',
+    'invoke-expression',
+    'iex ',
     'invoke-webrequest',
     'iwr ',
     'curl ',
@@ -484,8 +593,9 @@ function isSafePowerShellCommand(command) {
 
 async function runPowerShellRaw(command, timeoutMs = 10000) {
   return new Promise((resolve) => {
-    exec(
-      `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ${JSON.stringify(command)}`,
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-Command', String(command || '')],
       { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 * 4 },
       (error, stdout) => {
         if (error && !stdout) resolve(`Error: ${error.message}`);
@@ -730,6 +840,9 @@ const appControlToolDefinitions = [
 ];
 
 async function runAppControlTool(name, input) {
+  if (!confirmHighRiskTool(name, input)) {
+    return safeToolError('user did not approve this high-risk app-control action.');
+  }
   const pn = String(input.processName || '').replace(/[^a-zA-Z0-9._\- ]/g, '');
   try {
     switch (name) {
@@ -877,6 +990,9 @@ function limitOutput(text, max = 12000) {
 async function runComputerTool(name, input) {
   const fs = require('fs').promises;
   try {
+    if (!name.startsWith('app_') && !confirmHighRiskTool(name, input)) {
+      return safeToolError('user did not approve this high-risk computer action.');
+    }
     switch (name) {
       case 'computer_screenshot': {
         const sources = await desktopCapturer.getSources({
@@ -1037,8 +1153,9 @@ public class WinInput {
           return safeToolError('working directory is outside approved automation folders or is sensitive.');
         }
         return await new Promise((resolve) => {
-          const child = exec(
-            `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ${JSON.stringify(input.command)}`,
+          const child = execFile(
+            'powershell.exe',
+            ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-Command', String(input.command || '')],
             {
               cwd: input.cwd || process.cwd(),
               timeout: Math.min(Number(input.timeoutMs) || 120000, 600000),
@@ -1060,6 +1177,9 @@ public class WinInput {
         const target = input.target;
         if (!/^https?:\/\//i.test(target) && (!isPathAllowed(target) || looksSensitivePath(target))) {
           return safeToolError('open target is outside approved automation folders or is sensitive.');
+        }
+        if (/^https?:\/\//i.test(target) && !isAllowedExternalUrl(target)) {
+          return safeToolError('external URL scheme or host is not allowed.');
         }
         const error = /^https?:\/\//i.test(target)
           ? await shell.openExternal(target)
@@ -1101,7 +1221,9 @@ function isTaskComplete(text) {
 ipcMain.handle('anthropic-chat', async (_, { apiKey, model, systemPrompt, messages, tools, autonomous, maxRounds }) => {
   try {
     const Anthropic = require('@anthropic-ai/sdk');
-    const client = new Anthropic.default({ apiKey });
+    const resolvedApiKey = normalizeApiKeyInput(apiKey) || decryptKey('claude');
+    if (!resolvedApiKey) return { ok: false, error: 'claude API key is missing' };
+    const client = new Anthropic.default({ apiKey: resolvedApiKey });
     const activeModel = model || 'claude-sonnet-4-6';
     const activeTools = [...computerToolDefinitions, ...appControlToolDefinitions, ...(tools || [])];
     const computerSystemNote = `[로컬 컴퓨터 조작 권한]\n이 앱은 사용자의 개인용 앱입니다. computer_* 도구로 Windows PC의 화면 캡처, 마우스/키보드 제어, 파일/폴더/앱 조작을 직접 수행할 수 있습니다.\n- computer_screenshot: 현재 화면 캡처\n- computer_mouse_click / computer_mouse_move: 마우스 제어\n- computer_type_text / computer_key_press: 키보드 제어\n- computer_read_file / computer_write_file / computer_list_directory: 파일 조작\n작업 시작 전 screenshot으로 화면을 확인하세요. 완료 시 "작업 완료"라고 보고하세요.`;
@@ -1188,9 +1310,11 @@ function toOpenAIToolContent(result) {
 ipcMain.handle('computer-agent-chat', async (_, { apiKey, model, systemPrompt, messages, baseURL, headers, autonomous, maxRounds }) => {
   try {
     const OpenAI = require('openai');
+    const resolvedApiKey = normalizeApiKeyInput(apiKey) || decryptKey('openrouter') || decryptKey('kimi') || decryptKey('deepseek');
+    if (!resolvedApiKey) return { ok: false, error: 'compatible provider API key is missing' };
     const client = new OpenAI.default({
-      apiKey,
-      baseURL: baseURL || 'https://openrouter.ai/api/v1',
+      apiKey: resolvedApiKey,
+      baseURL: normalizeProviderBaseURL(baseURL, 'https://openrouter.ai/api/v1'),
       defaultHeaders: headers || {},
     });
 
@@ -1284,6 +1408,14 @@ function httpsJson(method, url, body, headers = {}) {
 
 ipcMain.handle('discord-webhook-send', async (_, { webhookUrl, content, embeds }) => {
   if (!webhookUrl) return { ok: false, error: 'webhookUrl is required' };
+  try {
+    const parsed = new URL(webhookUrl);
+    if (parsed.protocol !== 'https:' || !['discord.com', 'discordapp.com'].includes(parsed.hostname)) {
+      return { ok: false, error: 'Only Discord HTTPS webhook URLs are allowed' };
+    }
+  } catch {
+    return { ok: false, error: 'Invalid webhookUrl' };
+  }
   return httpsJson('POST', webhookUrl, { content, embeds });
 });
 
@@ -1307,7 +1439,12 @@ ipcMain.handle('open-vault-folder', async () => {
 
 ipcMain.handle('open-vault-subfolder', async (_, subfolder) => {
   const root = ensureVaultRoot();
-  const target = path.join(root, subfolder);
+  let target;
+  try {
+    target = safeVaultPath(root, subfolder);
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
   fsSync.mkdirSync(target, { recursive: true });
   const error = await shell.openPath(target);
   return error ? { ok: false, error } : { ok: true, data: target };
@@ -1336,30 +1473,30 @@ ipcMain.handle('open-obsidian-vault', async () => {
 
 ipcMain.handle('vault-read', async (_, { vaultRoot, filePath }) => {
   const fs = require('fs').promises;
-  const fullPath = path.join(vaultRoot || ensureVaultRoot(), filePath);
   try {
+    const fullPath = safeVaultPath(vaultRoot, filePath);
     return { ok: true, data: await fs.readFile(fullPath, 'utf-8') };
-  } catch {
-    return { ok: false, error: 'not found' };
+  } catch (err) {
+    return { ok: false, error: err.message || 'not found' };
   }
 });
 
 ipcMain.handle('vault-write', async (_, { vaultRoot, filePath, content }) => {
   const fs = require('fs').promises;
-  const fullPath = path.join(vaultRoot || ensureVaultRoot(), filePath);
   try {
+    const fullPath = safeVaultPath(vaultRoot, filePath);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, content, 'utf-8');
     return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  } catch {
+    return { ok: false, error: 'write target is outside the vault root or sensitive' };
   }
 });
 
 ipcMain.handle('vault-list', async (_, { vaultRoot, folder }) => {
   const fs = require('fs').promises;
-  const dir = path.join(vaultRoot || ensureVaultRoot(), folder);
   try {
+    const dir = safeVaultPath(vaultRoot, folder);
     const entries = await fs.readdir(dir, { withFileTypes: true });
     return {
       ok: true,
@@ -1373,8 +1510,14 @@ ipcMain.handle('vault-list', async (_, { vaultRoot, folder }) => {
 // Vault full-text search (관련도 점수 포함)
 ipcMain.handle('vault-search', async (_, { vaultRoot, query, folder }) => {
   const fs = require('fs').promises;
-  const root = vaultRoot || ensureVaultRoot();
-  const searchRoot = folder ? path.join(root, folder) : root;
+  let root;
+  let searchRoot;
+  try {
+    root = resolveVaultRoot(vaultRoot);
+    searchRoot = safeVaultPath(root, folder || '');
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 
   async function walk(dir) {
     let results = [];

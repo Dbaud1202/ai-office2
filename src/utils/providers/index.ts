@@ -26,6 +26,8 @@ export function getProvider(id: AIProviderId): AIProvider | undefined {
 }
 
 const KEY_PREFIX = 'ao2-provider-';
+const ELECTRON_SAFE_STORAGE_KEY = '__electron_safe_storage__';
+let electronProviderKeyStatus: Record<string, boolean> = {};
 
 function electronAPI() {
   return typeof window !== 'undefined' ? (window as any).electronAPI : null;
@@ -33,10 +35,6 @@ function electronAPI() {
 
 export { fetchModelsViaElectron } from './electronBridge.js';
 
-/**
- * 앱 시작 시 한 번 호출. Electron이면 safeStorage에서 키를 읽어 localStorage에 동기화.
- * 웹 빌드에서는 아무것도 하지 않음.
- */
 export async function initProviderKeys(): Promise<void> {
   const api = electronAPI();
   if (!api?.providerKeyGetAll) return;
@@ -44,32 +42,37 @@ export async function initProviderKeys(): Promise<void> {
   const result = await api.providerKeyGetAll();
   if (!result?.ok) return;
 
-  const safe = result.data as Record<string, string>;
+  electronProviderKeyStatus = result.data as Record<string, boolean>;
 
   for (const provider of PROVIDERS) {
     const id = provider.id;
-    const safeKey = safe[id] ?? '';
     const localKey = localStorage.getItem(`${KEY_PREFIX}${id}-key`) ?? '';
+    if (!localKey) continue;
 
-    if (safeKey) {
-      // safeStorage 기준으로 localStorage 동기화
-      localStorage.setItem(`${KEY_PREFIX}${id}-key`, safeKey);
-    } else if (localKey) {
-      // localStorage에만 있는 키 → safeStorage로 마이그레이션
-      await api.providerKeySet?.(id, localKey);
-    }
+    await api.providerKeySet?.(id, localKey);
+    electronProviderKeyStatus[id] = true;
+    localStorage.removeItem(`${KEY_PREFIX}${id}-key`);
   }
 }
 
 export function getProviderKey(id: AIProviderId): string {
+  if (electronAPI()) {
+    return electronProviderKeyStatus[id] ? ELECTRON_SAFE_STORAGE_KEY : '';
+  }
   return localStorage.getItem(`${KEY_PREFIX}${id}-key`) ?? '';
 }
 
 export function setProviderKey(id: AIProviderId, key: string) {
+  const api = electronAPI();
+  if (api?.providerKeySet) {
+    localStorage.removeItem(`${KEY_PREFIX}${id}-key`);
+    electronProviderKeyStatus[id] = Boolean(key);
+    api.providerKeySet(id, key);
+    return;
+  }
+
   if (key) localStorage.setItem(`${KEY_PREFIX}${id}-key`, key);
   else localStorage.removeItem(`${KEY_PREFIX}${id}-key`);
-  // Electron: safeStorage에 암호화 저장 (비동기, fire-and-forget)
-  electronAPI()?.providerKeySet?.(id, key);
 }
 
 function normalizeModelId(id: AIProviderId, value: string, defaultModel: string): string {
@@ -122,7 +125,6 @@ export function setAgentProvider(agentId: string, providerId: AIProviderId | nul
   else localStorage.removeItem(`ao2-agent-${agentId}-provider`);
 }
 
-// ── 운영 모드 ──────────────────────────────────────────────────────────────
 export type AgentMode = 'careful' | 'auto';
 
 export function getAgentMode(): AgentMode {
@@ -133,7 +135,6 @@ export function setAgentMode(mode: AgentMode) {
   localStorage.setItem('ao2-agent-mode', mode);
 }
 
-// ── 사용자 권고사항 ─────────────────────────────────────────────────────────
 export function getUserGuidelines(): string {
   return localStorage.getItem('ao2-user-guidelines') ?? '';
 }
