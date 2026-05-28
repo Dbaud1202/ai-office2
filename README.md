@@ -12,6 +12,8 @@
 **AI Office 2** is an open-source, Slack-style AI agent team platform.  
 Compose a team of specialized AI agents, give them a task, and watch them collaborate.
 
+New harness docs: [docs/HARNESS_GUIDE.md](docs/HARNESS_GUIDE.md) explains fast/direct/workroom/debate routing, self-reflection, MCP-style connector hints, and usage examples.
+
 ### Features
 
 - **Multi-agent collaboration** — PM delegates to Researcher, Developer, Writer automatically

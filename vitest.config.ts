@@ -8,6 +8,7 @@ export default defineConfig({
     environment: 'node',
     environmentMatchGlobs: [
       ['tests/providers/registry.test.ts', 'happy-dom'],
+      ['tests/harness/**/*.test.ts', 'happy-dom'],
     ],
     coverage: {
       provider: 'v8',

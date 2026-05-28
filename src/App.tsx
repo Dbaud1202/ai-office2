@@ -16,6 +16,7 @@ import PipelineModal from './components/Pipeline/PipelineModal.js';
 import WebViewPage from './components/WebView/WebViewPage.js';
 import UsageDashboard from './components/Dashboard/UsageDashboard.js';
 import ToolManager from './components/Dashboard/ToolManager.js';
+import HarnessDashboard from './components/Dashboard/HarnessDashboard.js';
 import WorkflowDashboard from './components/Dashboard/WorkflowDashboard.js';
 import TeamManager from './components/Dashboard/TeamManager.js';
 import SchedulerDashboard from './components/Dashboard/SchedulerDashboard.js';
@@ -60,6 +61,7 @@ function AppInner() {
       case 'webview': return <WebViewPage />;
       case 'usage': return <UsageDashboard />;
       case 'toolmanager': return <ToolManager />;
+      case 'harness': return <HarnessDashboard />;
       case 'workflow': return <WorkflowDashboard />;
       case 'team': return <TeamManager />;
       case 'scheduler': return <SchedulerDashboard />;

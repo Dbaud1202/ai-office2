@@ -55,6 +55,7 @@ export type ViewMode =
   | 'webview'
   | 'usage'
   | 'toolmanager'
+  | 'harness'
   | 'workflow'
   | 'team'
   | 'scheduler'

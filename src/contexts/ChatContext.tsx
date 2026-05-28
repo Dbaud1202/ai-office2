@@ -20,6 +20,9 @@ import { checkBudgetGuard } from '../utils/budgetGuard.js';
 import { getAgentPreset, presetInstruction } from '../utils/agentPresets.js';
 import { createTaskFromAgentWork } from '../utils/taskIntake.js';
 import { createApproval, loadWorkflowLogs, makeId as makeOpsId, notifyDiscord, saveWorkflowLogs } from '../utils/opsStore.js';
+import { buildHarnessRunBrief, classifyHarnessTask, inferHarnessWorkers, shouldDebate } from '../harness/router.js';
+import { recordHarnessReflection } from '../harness/reflection.js';
+import { recommendHarnessConnectors } from '../harness/connectors.js';
 import {
   getAgentProvider,
   getAgentMode,
@@ -538,7 +541,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       const localAutomationBlock = `\n\n[Local tool and skill policy]\n- If a task requires a missing skill, first prefer an existing installed skill under ~/.codex/skills or ~/.agents/skills.\n- Install skills only from GitHub HTTPS URLs or owner/repo identifiers, and only through the local skill manager safety harness.\n- Treat unknown downloads, shell metacharacters, credential access, browser profiles, wallets, and destructive system paths as unsafe.\n- If no suitable skill exists, create a minimal local skill under ~/.agents/skills with a SKILL.md that states when to use it and the safe workflow.\n- Report blocked installs or unsafe sources clearly instead of bypassing the safety harness.`;
 
-      const systemPrompt = `${guidelinesBlock}${agent.systemPrompt}${presetBlock}${memoryBlock}${modeBlock}${localAutomationBlock}`;
+      const harnessDecision = classifyHarnessTask(userText);
+      const connectorHints = recommendHarnessConnectors(userText)
+        .map((connector) => `${connector.name} (${connector.kind}, ${connector.status})`)
+        .join(', ');
+      const harnessBlock = `\n\n${buildHarnessRunBrief(harnessDecision)}\n- Relevant connectors: ${connectorHints || 'none'}`;
+
+      const systemPrompt = `${guidelinesBlock}${agent.systemPrompt}${presetBlock}${memoryBlock}${modeBlock}${localAutomationBlock}${harnessBlock}`;
 
       const apiMessages = history
         .filter((m) => m.role !== 'system')
@@ -731,6 +740,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         finalizeStreamingMessage(channelId, streamId, finalText);
         if (!wasForceStopped) {
           try {
+            if (harnessDecision.needsReflection) {
+              recordHarnessReflection({
+                agentId: agent.id,
+                prompt: userText,
+                output: finalText,
+                decision: harnessDecision,
+              });
+            }
             recordUsage({ providerId, inputChars, outputChars: finalText.length, model: providerModel });
             await persistMessage({ ...streamMsg, content: finalText, isStreaming: false });
           } catch (error) {
@@ -771,6 +788,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const trimmed = text.trim();
       if (streamingRef.current[channelId] || !trimmed) return;
       stopRequestedRef.current[channelId] = false;
+      const harnessDecision = classifyHarnessTask(trimmed);
 
       const channel = channels.find((c) => c.id === channelId);
       if (!channel) return;
@@ -809,31 +827,44 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const ceo = agents.find((a) => a.id === 'ceo') ?? agent;
       const workChannelId = WORK_CHANNEL_ID;
 
-      if (isGeneralChannel && isSimpleChat(trimmed)) {
+      if (isGeneralChannel && harnessDecision.route === 'fast') {
         await callAgent(ceo, channelId, currentHistory, trimmed);
         return;
       }
 
-      if (isWorkChannel) {
-        const workerIds = inferWorkerIds(trimmed);
+      if (isWorkChannel || (isGeneralChannel && !shouldDebate(harnessDecision))) {
+        const targetChannelId = isWorkChannel ? channelId : workChannelId;
+        const workerIds = harnessDecision.workerIds.length ? harnessDecision.workerIds : inferHarnessWorkers(trimmed);
         const workers = workerIds
           .map((id) => agents.find((a) => a.id === id))
           .filter((value): value is Agent => Boolean(value));
 
-        addSystemMessage(channelId, `업무 요청을 ${workers.map((worker) => worker.name).join(', ')}에게 배정합니다.`);
+        if (targetChannelId !== channelId) {
+          const workOrder: ChatMessage = {
+            id: makeId(),
+            channelId: targetChannelId,
+            role: 'user',
+            content: `[Harness direct route]\n${trimmed}`,
+            timestamp: new Date().toISOString(),
+          };
+          addMessage(workOrder);
+          await persistMessage(workOrder);
+        }
+
+        addSystemMessage(targetChannelId, `Harness route: ${harnessDecision.route}; assigned to ${workers.map((worker) => worker.name).join(', ')}.`);
         for (const worker of workers) {
-          if (stopRequestedRef.current[channelId]) return;
+          if (stopRequestedRef.current[targetChannelId]) return;
           createTaskFromAgentWork({
-            source: 'workroom',
+            source: isWorkChannel ? 'workroom' : 'meeting',
             agentId: worker.id,
             goal: trimmed,
             instruction: trimmed,
           });
           await callAgent(
             worker,
-            channelId,
-            messages[channelId] ?? [],
-            `[업무 채널 직접 지시]\n${trimmed}\n\n당신의 역할에서 바로 실행 가능한 결과물을 작성하세요.`
+            targetChannelId,
+            messages[targetChannelId] ?? [],
+            `[Harness direct work]\n${trimmed}\n\n${buildHarnessRunBrief(harnessDecision)}\n\nProduce an executable result for your lane.`
           );
         }
         return;

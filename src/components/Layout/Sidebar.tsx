@@ -12,6 +12,7 @@ interface SidebarProps {
 }
 
 const NAV_TOOLS: { id: ViewMode; icon: string; label: string }[] = [
+  { id: 'harness', icon: '🧠', label: '하네스' },
   { id: 'webview', icon: '🌐', label: 'AI 서비스' },
   { id: 'usage', icon: '📊', label: '사용량 대시보드' },
   { id: 'timeline', icon: '🧭', label: '실행 타임라인' },
@@ -82,6 +83,7 @@ export default function Sidebar({ view, onViewChange, onOpenPipeline }: SidebarP
         : hbStatus === 'idle'
           ? 'bg-emerald-400'
           : 'bg-gray-600';
+
     return (
       <button
         key={agent.id}
